@@ -1,0 +1,22 @@
+api_categories:
+  - id: generate-page-graph
+    labels:
+      zh: 生成页面路径地图
+    trigger_examples:
+      - 页面路径地图
+      - 页面访问链路
+    required_reads:
+      - ../rules/generate-page-graph.md
+      - ../rules/page-nodes-rules.md
+  - id: prd-split
+    labels:
+      zh: 需求拆解
+    trigger_examples:
+      - 需求拆解
+      - 任务估时
+    required_reads:
+      - ../rules/prd-split-rules.md
+      - ../rules/minapp-estimate.md
+      - ../rules/admin-estimate.md
+  
+

@@ -1,0 +1,144 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "sheet-json/v1",
+  "title": "sheet-json v1",
+  "description": "AI 与 Excel 之间的单一交换格式。顶层含格式标识与 sheets 数组。向上兼容 xlsx 技能的公式、数字格式与颜色编码约定。",
+  "type": "object",
+  "required": ["$schema", "sheets"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "sheet-json/v1"
+    },
+    "conventions": {
+      "description": "财务模型约定：自动推断单元格 role 并上色。省略则为纯数据表。",
+      "enum": ["financial-model"]
+    },
+    "sheets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/sheet" }
+    }
+  },
+  "definitions": {
+    "scalar": {
+      "type": ["string", "number", "boolean", "null"]
+    },
+    "preset": {
+      "description": "命名数字格式，映射到 xlsx 技能的标准格式串。与 fmt 互斥。",
+      "enum": [
+        "general",
+        "integer",
+        "decimal",
+        "currency",
+        "currency2",
+        "percent",
+        "multiple",
+        "text",
+        "date",
+        "datetime"
+      ]
+    },
+    "role": {
+      "description": "语义角色，决定字体色/底色。assumption 作用于底色，可与字体色角色叠加。",
+      "oneOf": [
+        { "$ref": "#/definitions/roleName" },
+        {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/roleName" }
+        }
+      ]
+    },
+    "roleName": {
+      "enum": ["input", "formula", "link", "external", "assumption"]
+    },
+    "cell": {
+      "oneOf": [
+        { "$ref": "#/definitions/scalar" },
+        { "$ref": "#/definitions/cellObject" }
+      ]
+    },
+    "cellObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "description": "值。与 f 同时出现时表示公式缓存值。",
+          "$ref": "#/definitions/scalar"
+        },
+        "f": {
+          "description": "公式，不带前导 =。",
+          "type": "string",
+          "minLength": 1
+        },
+        "t": {
+          "description": "将 v 按此类型解析为 Excel 日期/时间。",
+          "enum": ["date", "datetime", "time"]
+        },
+        "preset": { "$ref": "#/definitions/preset" },
+        "fmt": {
+          "description": "字面 Excel 数字格式串。与 preset 互斥。",
+          "type": "string",
+          "minLength": 1
+        },
+        "role": { "$ref": "#/definitions/role" },
+        "note": {
+          "description": "单元格批注，用于标注硬编码来源。",
+          "type": "string",
+          "minLength": 1
+        },
+        "link": {
+          "description": "超链接目标；若有 v，v 为显示文本。",
+          "type": "string",
+          "minLength": 1
+        },
+        "array": {
+          "description": "f 是否为数组公式。",
+          "type": "boolean"
+        }
+      },
+      "anyOf": [
+        { "required": ["f"] },
+        { "required": ["v"] },
+        { "required": ["link"] }
+      ],
+      "not": { "required": ["preset", "fmt"] }
+    },
+    "sheet": {
+      "type": "object",
+      "required": ["name", "rows"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 31,
+          "pattern": "^[^\\[\\]:*?/\\\\]+$"
+        },
+        "header": { "type": "boolean" },
+        "columns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/cell" }
+          }
+        },
+        "merges": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "columnWidths": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "freeze": { "type": "string" }
+      }
+    }
+  }
+}
