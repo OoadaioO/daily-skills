@@ -1,6 +1,6 @@
 ---
 name: prd-analysis
-description: 用于获取页面路径地图，需求拆解，需求估时。当用户获取页面路径地图，需求估时，需求拆解，估时时调用
+description: 用于获取页面路径地图，需求拆解。当用户获取页面路径地图，需求估时，需求拆解，估时，书写prd，书写需求文档，整理需求文档，保存原型、保存prd的时候时调用
 license: MIT
 metadata:
   author: boxu

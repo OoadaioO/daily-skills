@@ -1,0 +1,31 @@
+# FileBrowser 配置模板。只包含 FileBrowser 自身连接与暂存设置。
+# S3/CDN target 请使用相邻 object-storage/agent_config.example.toml 的
+# [object-storage] section，并合并到同一个 agent_config.toml。
+
+[filebrowser]
+default_source = "production"
+
+# FileBrowser -> object-storage 转存时使用的本地临时目录；为空时使用系统临时目录。
+staging_dir = ""
+
+[filebrowser.sources.production]
+adapter = "filebrowser"
+base_url = "https://files.example.com"
+
+# Quantum V2 账户创建的 API key。推荐通过环境变量提供，不要提交真实密钥。
+# 也可以直接填写 api_key；留空且环境变量未设置时，联网命令会提前报错。
+api_key = ""
+api_key_env = "FILEBROWSER_API_KEY"
+
+# FileBrowser Quantum 内部的 source 名称，不是本配置表名称。
+source = "项目"
+verify_tls = true
+timeout_seconds = 600
+
+# 单文件最大字节数；0 表示不设置 Skill 级上限。
+max_transfer_bytes = 0
+
+# 本地文件上传到 FileBrowser 时的流式分块大小。
+upload_chunk_bytes = 16777216
+
+# 可继续增加 [filebrowser.sources.<name>] 以配置多个独立实例/source。

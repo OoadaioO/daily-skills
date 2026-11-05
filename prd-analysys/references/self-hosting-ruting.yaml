@@ -18,5 +18,12 @@ api_categories:
       - ../rules/prd-split-rules.md
       - ../rules/minapp-estimate.md
       - ../rules/admin-estimate.md
-  
+  - id: prd-write
+    labels:
+      zh: 书写prd
+    trigger_examples:
+      - 保存prd，书写prd
+      - 保存需求文档，书写需求文档
+    required_reads:
+      - ../rules/prd-write.md
 

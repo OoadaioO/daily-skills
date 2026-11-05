@@ -1,0 +1,281 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from hashlib import sha256
+from pathlib import Path
+from typing import cast
+
+import pytest
+from boto3.s3.transfer import TransferConfig
+from botocore.exceptions import ClientError
+
+from object_storage.models import S3TargetConfig
+from object_storage.target import (
+    CONTENT_SHA256_METADATA_KEY,
+    S3Target,
+    TargetError,
+    calculate_file_sha256,
+    normalize_object_key,
+    s3_client_options,
+)
+
+
+class FakeS3Client:
+    def __init__(self) -> None:
+        self.objects: dict[tuple[str, str], bytes] = {}
+        self.metadata: dict[tuple[str, str], dict[str, str]] = {}
+        self.cache_controls: dict[tuple[str, str], str] = {}
+        self.extra_args: dict[str, object] = {}
+        self.upload_calls = 0
+
+    def head_object(self, *, Bucket: str, Key: str) -> Mapping[str, object]:
+        try:
+            content = self.objects[(Bucket, Key)]
+        except KeyError as exc:
+            raise ClientError(
+                {
+                    "Error": {"Code": "404", "Message": "Not Found"},
+                    "ResponseMetadata": {
+                        "RequestId": "request-id",
+                        "HostId": "host-id",
+                        "HTTPStatusCode": 404,
+                        "HTTPHeaders": {},
+                        "RetryAttempts": 0,
+                    },
+                },
+                "HeadObject",
+            ) from exc
+        result: dict[str, object] = {
+            "ContentLength": len(content),
+            "ETag": '"etag-value"',
+            "Metadata": self.metadata.get((Bucket, Key), {}),
+        }
+        if cache_control := self.cache_controls.get((Bucket, Key)):
+            result["CacheControl"] = cache_control
+        return result
+
+    def upload_file(
+        self,
+        Filename: str,
+        Bucket: str,
+        Key: str,
+        ExtraArgs: dict[str, object],
+        Config: TransferConfig,
+    ) -> None:
+        del Config
+        self.upload_calls += 1
+        self.objects[(Bucket, Key)] = Path(Filename).read_bytes()
+        raw = ExtraArgs.get("Metadata")
+        self.metadata[(Bucket, Key)] = (
+            {str(key): str(value) for key, value in cast(Mapping[object, object], raw).items()}
+            if isinstance(raw, Mapping)
+            else {}
+        )
+        if cache_control := ExtraArgs.get("CacheControl"):
+            self.cache_controls[(Bucket, Key)] = str(cache_control)
+        else:
+            self.cache_controls.pop((Bucket, Key), None)
+        self.extra_args = ExtraArgs
+
+    def download_file(
+        self,
+        Bucket: str,
+        Key: str,
+        Filename: str,
+        Config: TransferConfig,
+    ) -> None:
+        del Config
+        Path(Filename).write_bytes(self.objects[(Bucket, Key)])
+
+    def list_objects_v2(
+        self,
+        *,
+        Bucket: str,
+        Prefix: str,
+        ContinuationToken: str | None = None,
+    ) -> Mapping[str, object]:
+        del ContinuationToken
+        return {
+            "Contents": [
+                {"Key": key, "Size": len(value)}
+                for (bucket, key), value in self.objects.items()
+                if bucket == Bucket and key.startswith(Prefix)
+            ],
+            "IsTruncated": False,
+        }
+
+
+def _target(client: FakeS3Client) -> S3Target:
+    return S3Target(
+        S3TargetConfig(
+            name="archive",
+            bucket="bucket",
+            prefix="backup",
+            public_base_url="https://cdn.example.test",
+        ),
+        client=client,
+    )
+
+
+def test_normalize_object_key_and_cos_options() -> None:
+    assert normalize_object_key("/folder\\video.mp4") == "folder/video.mp4"
+    with pytest.raises(TargetError):
+        normalize_object_key("../secret")
+    options = s3_client_options(S3TargetConfig(name="cos", bucket="bucket"))
+    assert options["request_checksum_calculation"] == "when_required"
+    assert options["response_checksum_validation"] == "when_required"
+
+
+def test_refuses_overwrite_by_default() -> None:
+    client = FakeS3Client()
+    client.objects[("bucket", "backup/existing.txt")] = b"old"
+    target = _target(client)
+    with pytest.raises(TargetError, match="already exists"):
+        target.ensure_writable("backup/existing.txt", overwrite=False)
+    target.ensure_writable("backup/existing.txt", overwrite=True)
+
+
+def test_upload_writes_digest_and_builds_public_url(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    local = tmp_path / "hello world.txt"
+    local.write_bytes(b"hello")
+    target = _target(client)
+    key = target.resolve_key("docs/hello world.txt")
+    result = target.upload(local, key, content_type="text/plain")
+
+    assert result.object_key == "backup/docs/hello world.txt"
+    assert result.public_url.endswith("backup/docs/hello%20world.txt")
+    assert result.content_sha256 == calculate_file_sha256(local)
+    assert client.extra_args["Metadata"] == {
+        CONTENT_SHA256_METADATA_KEY: calculate_file_sha256(local)
+    }
+
+
+def test_if_changed_skips_identical_object(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    local = tmp_path / "hello.txt"
+    local.write_bytes(b"hello")
+    target = _target(client)
+    key = target.resolve_key("hello.txt")
+    client.objects[("bucket", key)] = b"hello"
+    client.metadata[("bucket", key)] = {CONTENT_SHA256_METADATA_KEY: calculate_file_sha256(local)}
+
+    result = target.upload(local, key, if_changed=True)
+    assert result.skipped_unchanged is True
+    assert client.upload_calls == 0
+
+
+def test_legacy_object_without_digest_is_replaced(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    local = tmp_path / "hello.txt"
+    local.write_bytes(b"hello")
+    target = _target(client)
+    key = target.resolve_key("hello.txt")
+    client.objects[("bucket", key)] = b"hello"
+
+    result = target.upload(local, key, if_changed=True)
+    assert result.skipped_unchanged is False
+    assert client.upload_calls == 1
+
+
+def test_upload_sets_explicit_cache_control(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    local = tmp_path / "index.html"
+    local.write_text("index", encoding="utf-8")
+    target = _target(client)
+    key = target.resolve_key("index.html")
+
+    result = target.upload(local, key, cache_control="no-cache,max-age=0,must-revalidate")
+
+    assert client.extra_args["CacheControl"] == "no-cache,max-age=0,must-revalidate"
+    assert result.cache_control == "no-cache,max-age=0,must-revalidate"
+
+
+def test_upload_preserves_existing_cache_control_when_omitted(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    local = tmp_path / "index.html"
+    local.write_text("new index", encoding="utf-8")
+    target = _target(client)
+    key = target.resolve_key("index.html")
+    client.objects[("bucket", key)] = b"old index"
+    client.cache_controls[("bucket", key)] = "no-cache,max-age=0,must-revalidate"
+
+    existing = target.ensure_writable(key, overwrite=True)
+    result = target.upload(local, key, existing=existing, existing_checked=True)
+
+    assert client.extra_args["CacheControl"] == "no-cache,max-age=0,must-revalidate"
+    assert result.cache_control == "no-cache,max-age=0,must-revalidate"
+
+
+def test_if_changed_reuploads_identical_content_to_change_cache_control(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    local = tmp_path / "index.html"
+    local.write_text("same index", encoding="utf-8")
+    target = _target(client)
+    key = target.resolve_key("index.html")
+    client.objects[("bucket", key)] = local.read_bytes()
+    client.metadata[("bucket", key)] = {CONTENT_SHA256_METADATA_KEY: calculate_file_sha256(local)}
+    client.cache_controls[("bucket", key)] = "max-age=3600"
+
+    result = target.upload(
+        local,
+        key,
+        if_changed=True,
+        cache_control="no-cache,max-age=0,must-revalidate",
+    )
+
+    assert result.skipped_unchanged is False
+    assert client.upload_calls == 1
+    assert result.cache_control == "no-cache,max-age=0,must-revalidate"
+
+
+def test_download_verifies_size_and_sha256(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    target = _target(client)
+    key = target.resolve_key("releases/index.html")
+    client.objects[("bucket", key)] = b"index"
+    client.metadata[("bucket", key)] = {CONTENT_SHA256_METADATA_KEY: sha256(b"index").hexdigest()}
+    output = tmp_path / "output" / "index.html"
+
+    result = target.download(key, output)
+
+    assert output.read_bytes() == b"index"
+    assert result.size == 5
+    assert result.sha256_verified is True
+    assert result.content_sha256 == sha256(b"index").hexdigest()
+
+
+def test_download_rejects_invalid_sha256_without_leaving_output(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    target = _target(client)
+    key = target.resolve_key("releases/index.html")
+    client.objects[("bucket", key)] = b"index"
+    client.metadata[("bucket", key)] = {CONTENT_SHA256_METADATA_KEY: "incorrect"}
+    output = tmp_path / "index.html"
+
+    with pytest.raises(TargetError, match="SHA-256"):
+        target.download(key, output)
+
+    assert not output.exists()
+    assert not list(tmp_path.glob(".index.html.*.part"))
+
+
+def test_head_returns_stable_object_metadata(tmp_path: Path) -> None:
+    client = FakeS3Client()
+    target = _target(client)
+    key = target.resolve_key("releases/index.html")
+    client.objects[("bucket", key)] = b"index"
+    client.metadata[("bucket", key)] = {CONTENT_SHA256_METADATA_KEY: sha256(b"index").hexdigest()}
+    client.cache_controls[("bucket", key)] = "no-cache"
+
+    result = target.head(key)
+
+    assert result.object_key == key
+    assert result.size == 5
+    assert result.cache_control == "no-cache"
+    assert result.content_sha256 == sha256(b"index").hexdigest()
+
+
+def test_head_reports_missing_object() -> None:
+    with pytest.raises(TargetError, match="does not exist"):
+        _target(FakeS3Client()).head("backup/missing.txt")

@@ -1,0 +1,21 @@
+# Immich Skill 配置示例
+# 复制到当前工作目录、skill 目录、Git 项目根目录，或合并到 ~/.agents/agent_config.toml
+
+[immich]
+# Immich 服务器地址（不要包含 /api 后缀）
+base_url = "https://your-immich-server.com"
+
+# API 密钥（从 Immich Web 界面获取：用户设置 > API Key）
+api_key = ""
+
+# 默认上传的 Album 名称（可选）
+# 如果不设置，上传时需要通过 --album 参数指定
+default_album = "My Photos"
+
+# 默认相册的公开分享地址（可选）
+# 上传并成功加入 default_album 后，返回 {public_album_url}/photos/{asset_id}
+public_album_url = "https://your-immich-server.com/s/shared-album-key"
+
+# 资源在 Immich 时间线中的时间来源：
+# upload（默认）= 本次上传时间；source = 媒体内嵌时间或本地文件时间
+asset_time_source = "upload"
