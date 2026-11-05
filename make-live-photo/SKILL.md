@@ -117,7 +117,3 @@ python -m make_live_photo -i photo.jpg -v clip.mov
 - 底层依赖：系统 `ffmpeg`（仅 `-v` 抽封面时需要，不随包分发）；`makelive`（写入元数据并打包，随本包安装）。
 - 打包只操作副本，不修改原始图片与视频。
 - `.pvt` 内嵌 QuickTime 元数据，可能无法作为 Live Wallpaper（动态壁纸）使用。
-
-## 问题指引
-
-- 输入是 `.mp4` 不能正常显示时，尝试 `ffmpeg` 转换成 `.mov` 重新生成
