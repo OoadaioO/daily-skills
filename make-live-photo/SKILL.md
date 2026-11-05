@@ -55,6 +55,9 @@ brew install ffmpeg
 
 ffmpeg 仅在 `-v` 抽封面时需要，只传图片 + 视频时不需要。
 
+
+>注意：如果 python 使用了 venv 或者 conda 等环境，需要使用对应环境来检测和安装依赖
+
 ## 工作流
 
 ### 1. 确认素材与目标
