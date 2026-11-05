@@ -1,9 +1,9 @@
 ---
-name: make-livephoto
+name: make-live-photo
 description: 实况图片生成工具。当用户要制作 live photo、生成实况图片时使用。
 ---
 
-# make-livephoto
+# make-live-photo
 
 把一张图片和一段视频合成为 Apple **Live Photo**，并打包成 `.pvt` 文件。
 生成的 `.pvt` 可以直接通过隔空投送（AirDrop）发到 iPhone，接收后自动保存为实况照片，

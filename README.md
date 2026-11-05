@@ -23,7 +23,7 @@ npx skills add -g OoadaioO/daily-skills --skill <skill-name> --agent <pi|codex|c
 
 | 技能 | 说明 |
 | --- | --- |
-| make-livephoto | 用 make-live-photo 把图片+视频合成 Apple Live Photo，打包成 .pvt，传 iPhone |
+| make-live-photo | 用 make-live-photo 把图片+视频合成 Apple Live Photo，打包成 .pvt，传 iPhone |
 | image-generation | AI 图片生成/编辑，调用 OpenAI/Gemini/Seedream 等，含抠图、透明底、参考图编辑 |
 | matting | 用独立 matting-api 抠图、去背景，输出透明 PNG |
 | upscale | 用独立 upscale-api 对图片/视频超分、AI 增强、补帧 |
