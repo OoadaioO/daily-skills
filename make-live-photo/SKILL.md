@@ -59,11 +59,10 @@ ffmpeg 仅在 `-v` 抽封面时需要，只传图片 + 视频时不需要。
 
 ### 1. 确认素材与目标
 
-- **视频**：必填，建议 `.mov`（Live Photo 要求 Apple 能识别的 QuickTime 格式）。
+- **视频**：必填，Live Photo 要求 Apple 能识别的 QuickTime 格式（`.mp4` 或 `.mov` 优先 `mov` ）。
 - **图片**：可选，`.jpg / .jpeg / .heic`；省略时用视频**第一帧**做封面。
 - **封面时间**：若用 `-t` 指定时间点，则忽略 `-i` 图片。
 
-> 格式建议：图片用 `.jpg`/`.heic`，视频用 `.mov`，否则可能无法被 iOS 正确识别。
 
 ### 2. 调用工具
 
@@ -91,7 +90,7 @@ python -m make_live_photo -i photo.jpg -v clip.mov
 | --- | --- |
 | `-i, --image` | 可选：图片路径（`.jpg`/`.jpeg`/`.heic`）。省略时用视频第一帧 |
 | `-t, --time` | 可选：封面时间点（秒、`MM:SS` 或 `HH:MM:SS`）。指定后忽略 `-i` |
-| `-v, --video` | **必填**：视频路径（建议 `.mov`） |
+| `-v, --video` | **必填**：视频路径（QuickTime 格式，`.mov` 最稳妥） |
 | `-o, --output` | 可选：输出 `.pvt` 路径。默认视频目录下与视频同名的 `.pvt`，已存在则覆盖 |
 
 等价于 `python -m make_live_photo`。
@@ -115,3 +114,7 @@ python -m make_live_photo -i photo.jpg -v clip.mov
 - 底层依赖：系统 `ffmpeg`（仅 `-v` 抽封面时需要，不随包分发）；`makelive`（写入元数据并打包，随本包安装）。
 - 打包只操作副本，不修改原始图片与视频。
 - `.pvt` 内嵌 QuickTime 元数据，可能无法作为 Live Wallpaper（动态壁纸）使用。
+
+## 问题指引
+
+- 输入是 `.mp4` 不能正常显示时，尝试 `ffmpeg` 转换成 `.mov` 重新生成
