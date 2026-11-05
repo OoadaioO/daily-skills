@@ -48,4 +48,7 @@ npx skills add -g OoadaioO/daily-skills --skill <skill-name> --agent <pi|codex|c
 | mcp-deploy | MCP 服务器自动部署（智谱/Minimax/Gitea 等）|
 | prd-analysis | 需求拆解、估时、写 PRD 需求文档 |
 
-> 部分技能引用 [zrong/skills](https://github.com/zrong/skills) 
+
+## References
+
+部分技能引用 [zrong/skills](https://github.com/zrong/skills) 
